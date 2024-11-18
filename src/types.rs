@@ -33,7 +33,7 @@ pub enum Nibble {
 
 impl Nibble {
     pub fn from_upper(byte: u8) -> Nibble {
-        match (byte & 0xF0 as u8) >> 4 {
+        match (byte & 0xF0_u8) >> 4 {
             0x00 => Nibble::Zero,
             0x01 => Nibble::One,
             0x02 => Nibble::Two,
@@ -55,7 +55,7 @@ impl Nibble {
     }
 
     pub fn from_lower(byte: u8) -> Nibble {
-        match byte & 0x0F as u8 {
+        match byte & 0x0F_u8 {
             0x00 => Nibble::Zero,
             0x01 => Nibble::One,
             0x02 => Nibble::Two,
