@@ -1,4 +1,5 @@
-use crate::types::{Address, Nibble, Register};
+use crate::types::{Address, GeneralRegister, Nibble};
+use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Instruction {
@@ -14,64 +15,64 @@ pub enum Instruction {
         addr: Address,
     },
     SkipIfEqByte {
-        reg: Register,
+        reg: GeneralRegister,
         value: u8,
     },
     SkipIfNeqByte {
-        reg: Register,
+        reg: GeneralRegister,
         value: u8,
     },
     SkipIfEqReg {
-        lhs: Register,
-        rhs: Register,
+        lhs: GeneralRegister,
+        rhs: GeneralRegister,
     },
     LoadValue {
-        dest: Register,
+        dest: GeneralRegister,
         value: u8,
     },
     AddValue {
-        dest: Register,
+        dest: GeneralRegister,
         value: u8,
     },
     LoadRegister {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     Or {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     And {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     Xor {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     AddRegister {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     Subtract {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     ShiftRight {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     SubtractNegate {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     ShiftLeft {
-        dest: Register,
-        source: Register,
+        dest: GeneralRegister,
+        source: GeneralRegister,
     },
     SkipIfNeqReg {
-        lhs: Register,
-        rhs: Register,
+        lhs: GeneralRegister,
+        rhs: GeneralRegister,
     },
     LoadI {
         addr: Address,
@@ -80,50 +81,57 @@ pub enum Instruction {
         addr: Address,
     },
     Random {
-        dest: Register,
+        dest: GeneralRegister,
         mask: u8,
     },
     Draw {
-        x: Register,
-        y: Register,
+        x: GeneralRegister,
+        y: GeneralRegister,
         num_bytes: Nibble,
     },
     SkipIfKeyDown {
-        key_val: Register,
+        key_val: GeneralRegister,
     },
     SkipIfKeyUp {
-        key_val: Register,
+        key_val: GeneralRegister,
     },
     LoadFromDelayTimer {
-        dest: Register,
+        dest: GeneralRegister,
     },
     LoadFromKey {
-        dest: Register,
+        dest: GeneralRegister,
     },
     SetDelayTimer {
-        source: Register,
+        source: GeneralRegister,
     },
     SetSoundTimer {
-        source: Register,
+        source: GeneralRegister,
     },
     AddI {
-        source: Register,
+        source: GeneralRegister,
     },
     LoadSpriteLocation {
-        digit: Register,
+        digit: GeneralRegister,
     },
     LoadBcd {
-        source: Register,
+        source: GeneralRegister,
     },
     StoreRegisterRangeAtI {
-        last: Register,
+        last: GeneralRegister,
     },
     LoadRegisterRangeFromI {
-        last: Register,
+        last: GeneralRegister,
     },
 }
 
-pub struct InstructionBytePair(u16);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InstructionBytePair(pub u16);
+
+impl Display for InstructionBytePair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#06x}", u16::to_be(self.0))
+    }
+}
 
 impl InstructionBytePair {
     fn get_upper_byte(&self) -> u8 {
@@ -197,8 +205,8 @@ fn handle_seven(bytes: InstructionBytePair) -> Option<Instruction> {
 }
 
 fn handle_eight(bytes: InstructionBytePair) -> Option<Instruction> {
-    let x: Register = Nibble::from_lower(bytes.get_upper_byte()).into();
-    let y: Register = Nibble::from_upper(bytes.get_lower_byte()).into();
+    let x: GeneralRegister = Nibble::from_lower(bytes.get_upper_byte()).into();
+    let y: GeneralRegister = Nibble::from_upper(bytes.get_lower_byte()).into();
     match Nibble::from_lower(bytes.get_lower_byte()) {
         Nibble::Zero => Some(Instruction::LoadRegister { dest: x, source: y }),
         Nibble::One => Some(Instruction::Or { dest: x, source: y }),
@@ -252,7 +260,7 @@ fn handle_thirteen(bytes: InstructionBytePair) -> Option<Instruction> {
 }
 
 fn handle_fourteen(bytes: InstructionBytePair) -> Option<Instruction> {
-    let key_val: Register = Nibble::from_lower(bytes.get_upper_byte()).into();
+    let key_val: GeneralRegister = Nibble::from_lower(bytes.get_upper_byte()).into();
     match bytes.get_lower_byte() {
         0x9E => Some(Instruction::SkipIfKeyDown { key_val }),
         0xA1 => Some(Instruction::SkipIfKeyUp { key_val }),
@@ -261,7 +269,7 @@ fn handle_fourteen(bytes: InstructionBytePair) -> Option<Instruction> {
 }
 
 fn handle_fifteen(bytes: InstructionBytePair) -> Option<Instruction> {
-    let x: Register = Nibble::from_lower(bytes.get_upper_byte()).into();
+    let x: GeneralRegister = Nibble::from_lower(bytes.get_upper_byte()).into();
     match bytes.get_lower_byte() {
         0x07 => Some(Instruction::LoadFromDelayTimer { dest: x }),
         0x0A => Some(Instruction::LoadFromKey { dest: x }),
@@ -360,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_se_vx_byte() {
-        for reg in Register::iter() {
+        for reg in GeneralRegister::iter() {
             for value in all_bytes() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x3000 | ((reg as u16) << 8) | value as u16);
@@ -372,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_sne_vx_byte() {
-        for reg in Register::iter() {
+        for reg in GeneralRegister::iter() {
             for value in all_bytes() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x4000 | ((reg as u16) << 8) | value as u16);
@@ -384,8 +392,8 @@ mod tests {
 
     #[test]
     fn test_se_vx_vy() {
-        for lhs in Register::iter() {
-            for rhs in Register::iter() {
+        for lhs in GeneralRegister::iter() {
+            for rhs in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x5000 | ((lhs as u16) << 8) | ((rhs as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -405,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_ld_vx_byte() {
-        for dest in Register::iter() {
+        for dest in GeneralRegister::iter() {
             for value in all_bytes() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x6000 | ((dest as u16) << 8) | value as u16);
@@ -417,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_add_vx_byte() {
-        for dest in Register::iter() {
+        for dest in GeneralRegister::iter() {
             for value in all_bytes() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x7000 | ((dest as u16) << 8) | value as u16);
@@ -429,8 +437,8 @@ mod tests {
 
     #[test]
     fn test_ld_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8000 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -441,8 +449,8 @@ mod tests {
 
     #[test]
     fn test_or_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8001 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -453,8 +461,8 @@ mod tests {
 
     #[test]
     fn test_and_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8002 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -465,8 +473,8 @@ mod tests {
 
     #[test]
     fn test_xor_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8003 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -477,8 +485,8 @@ mod tests {
 
     #[test]
     fn test_add_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8004 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -489,8 +497,8 @@ mod tests {
 
     #[test]
     fn test_sub_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8005 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -501,8 +509,8 @@ mod tests {
 
     #[test]
     fn test_shr_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8006 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -513,8 +521,8 @@ mod tests {
 
     #[test]
     fn test_subn_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x8007 | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -525,8 +533,8 @@ mod tests {
 
     #[test]
     fn test_shl_vx_vy() {
-        for dest in Register::iter() {
-            for source in Register::iter() {
+        for dest in GeneralRegister::iter() {
+            for source in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x800E | ((dest as u16) << 8) | ((source as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -546,8 +554,8 @@ mod tests {
 
     #[test]
     fn test_sne_vx_vy() {
-        for lhs in Register::iter() {
-            for rhs in Register::iter() {
+        for lhs in GeneralRegister::iter() {
+            for rhs in GeneralRegister::iter() {
                 let skip_eq_bytes =
                     InstructionBytePair(0x9000 | ((lhs as u16) << 8) | ((rhs as u16) << 4));
                 let decoded = decode(skip_eq_bytes).unwrap();
@@ -585,7 +593,7 @@ mod tests {
 
     #[test]
     fn test_rnd_vx() {
-        for dest in Register::iter() {
+        for dest in GeneralRegister::iter() {
             for mask in all_bytes() {
                 let skip_eq_bytes =
                     InstructionBytePair(0xC000 | ((dest as u16) << 8) | mask as u16);
@@ -597,8 +605,8 @@ mod tests {
 
     #[test]
     fn test_drw_vx_vy() {
-        for x in Register::iter() {
-            for y in Register::iter() {
+        for x in GeneralRegister::iter() {
+            for y in GeneralRegister::iter() {
                 for num_bytes in Nibble::iter() {
                     let draw_bytes = InstructionBytePair(
                         0xD000 | ((x as u16) << 8) | ((y as u16) << 4) | num_bytes as u16,
@@ -612,7 +620,7 @@ mod tests {
 
     #[test]
     fn test_skp_vx() {
-        for key_val in Register::iter() {
+        for key_val in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xE09E | ((key_val as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::SkipIfKeyDown { key_val });
@@ -621,7 +629,7 @@ mod tests {
 
     #[test]
     fn test_sknp_vx() {
-        for key_val in Register::iter() {
+        for key_val in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xE0A1 | ((key_val as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::SkipIfKeyUp { key_val });
@@ -630,7 +638,7 @@ mod tests {
 
     #[test]
     fn test_ld_vx_dt() {
-        for dest in Register::iter() {
+        for dest in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF007 | ((dest as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::LoadFromDelayTimer { dest });
@@ -639,7 +647,7 @@ mod tests {
 
     #[test]
     fn test_ld_vx_k() {
-        for dest in Register::iter() {
+        for dest in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF00A | ((dest as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::LoadFromKey { dest });
@@ -648,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_ld_dt_vx() {
-        for source in Register::iter() {
+        for source in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF015 | ((source as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::SetDelayTimer { source });
@@ -657,7 +665,7 @@ mod tests {
 
     #[test]
     fn test_ld_st_vx() {
-        for source in Register::iter() {
+        for source in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF018 | ((source as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::SetSoundTimer { source });
@@ -666,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_add_i_vx() {
-        for source in Register::iter() {
+        for source in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF01E | ((source as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::AddI { source });
@@ -675,7 +683,7 @@ mod tests {
 
     #[test]
     fn test_ld_f_vx() {
-        for digit in Register::iter() {
+        for digit in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF029 | ((digit as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::LoadSpriteLocation { digit });
@@ -684,7 +692,7 @@ mod tests {
 
     #[test]
     fn test_ld_b_vx() {
-        for source in Register::iter() {
+        for source in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF033 | ((source as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::LoadBcd { source });
@@ -693,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_ld_iarray_vx() {
-        for last in Register::iter() {
+        for last in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF055 | ((last as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::StoreRegisterRangeAtI { last });
@@ -702,7 +710,7 @@ mod tests {
 
     #[test]
     fn test_ld_vx_iarray() {
-        for last in Register::iter() {
+        for last in GeneralRegister::iter() {
             let skip_key_bytes = InstructionBytePair(0xF065 | ((last as u16) << 8));
             let decoded = decode(skip_key_bytes).unwrap();
             assert_eq!(decoded, Instruction::LoadRegisterRangeFromI { last });
@@ -712,7 +720,7 @@ mod tests {
     #[test]
     fn test_invalid_fifteens() {
         let valid_tails = [0x07, 0x0A, 0x15, 0x18, 0x1E, 0x29, 0x33, 0x55, 0x65];
-        for x in Register::iter() {
+        for x in GeneralRegister::iter() {
             for invalid_tail in (0x00..=0xFF).filter(|x| !valid_tails.contains(x)) {
                 let invalid_bytes = InstructionBytePair(0xF000 | ((x as u16) << 8) | invalid_tail);
                 let decoded = decode(invalid_bytes);

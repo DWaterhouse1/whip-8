@@ -1,12 +1,24 @@
-use strum_macros::EnumIter;
+use strum_macros::{Display, EnumIter};
 
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Address(u16);
+
+impl Address {
+    pub fn increment(&mut self, value: usize) {
+        *self = Address(self.0 + value as u16);
+    }
+}
 
 impl From<u16> for Address {
     fn from(value: u16) -> Self {
         Address(value & 0x0FFF)
+    }
+}
+
+impl From<Address> for u16 {
+    fn from(value: Address) -> Self {
+        value.0
     }
 }
 
@@ -78,45 +90,45 @@ impl Nibble {
 }
 
 #[repr(u8)]
-#[derive(Debug, Eq, PartialEq, EnumIter, Clone, Copy)]
-pub enum Register {
-    V0,
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-    V8,
-    V9,
-    VA,
-    VB,
-    VC,
-    VD,
-    VE,
-    VF,
+#[derive(Debug, Eq, PartialEq, EnumIter, Clone, Copy, Display)]
+pub enum GeneralRegister {
+    V0 = 0x0_u8,
+    V1 = 0x1_u8,
+    V2 = 0x2_u8,
+    V3 = 0x3_u8,
+    V4 = 0x4_u8,
+    V5 = 0x5_u8,
+    V6 = 0x6_u8,
+    V7 = 0x7_u8,
+    V8 = 0x8_u8,
+    V9 = 0x9_u8,
+    VA = 0xA_u8,
+    VB = 0xB_u8,
+    VC = 0xC_u8,
+    VD = 0xD_u8,
+    VE = 0xE_u8,
+    VF = 0xF_u8,
 }
 
-impl From<Nibble> for Register {
+impl From<Nibble> for GeneralRegister {
     fn from(value: Nibble) -> Self {
         match value {
-            Nibble::Zero => Register::V0,
-            Nibble::One => Register::V1,
-            Nibble::Two => Register::V2,
-            Nibble::Three => Register::V3,
-            Nibble::Four => Register::V4,
-            Nibble::Five => Register::V5,
-            Nibble::Six => Register::V6,
-            Nibble::Seven => Register::V7,
-            Nibble::Eight => Register::V8,
-            Nibble::Nine => Register::V9,
-            Nibble::Ten => Register::VA,
-            Nibble::Eleven => Register::VB,
-            Nibble::Twelve => Register::VC,
-            Nibble::Thirteen => Register::VD,
-            Nibble::Fourteen => Register::VE,
-            Nibble::Fifteen => Register::VF,
+            Nibble::Zero => GeneralRegister::V0,
+            Nibble::One => GeneralRegister::V1,
+            Nibble::Two => GeneralRegister::V2,
+            Nibble::Three => GeneralRegister::V3,
+            Nibble::Four => GeneralRegister::V4,
+            Nibble::Five => GeneralRegister::V5,
+            Nibble::Six => GeneralRegister::V6,
+            Nibble::Seven => GeneralRegister::V7,
+            Nibble::Eight => GeneralRegister::V8,
+            Nibble::Nine => GeneralRegister::V9,
+            Nibble::Ten => GeneralRegister::VA,
+            Nibble::Eleven => GeneralRegister::VB,
+            Nibble::Twelve => GeneralRegister::VC,
+            Nibble::Thirteen => GeneralRegister::VD,
+            Nibble::Fourteen => GeneralRegister::VE,
+            Nibble::Fifteen => GeneralRegister::VF,
         }
     }
 }
