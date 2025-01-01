@@ -48,6 +48,25 @@ pub struct Processor {
     display: Display,
 }
 
+fn to_bcd(byte: u8) -> [u8; 3] {
+    let mut scratch = 0_u32;
+    scratch |= byte as u32;
+    for _ in 0..8 {
+        for nibble_idx in 2..5 {
+            if (scratch >> (4 * nibble_idx)) & 0xF_u32 >= 5 {
+                scratch += 3_u32 << (4 * nibble_idx);
+            }
+        }
+        scratch <<= 1;
+    }
+
+    [
+        ((scratch >> 16) & 0xF_u32) as u8,
+        ((scratch >> 12) & 0xF_u32) as u8,
+        ((scratch >> 8) & 0xF_u32) as u8,
+    ]
+}
+
 impl Processor {
     pub fn new(program_bytes: Vec<u8>) -> Result<Self, ProcessorError> {
         if program_bytes.len() > MAX_PROGRAM_BYTES {
@@ -339,25 +358,28 @@ impl Processor {
 
             Instruction::LoadSpriteLocation { digit } => {
                 let hex_digit = self.registers.get_general(digit);
-                let hex_sprite_address = hex_digit as usize * HEX_SPRITE_STRIDE;
-                let target_address = u16::from(self.registers.i) as usize;
+                let hex_sprite_address = (hex_digit & 0x0F) as u16 * HEX_SPRITE_STRIDE as u16;
 
-                if target_address + HEX_SPRITE_STRIDE > MEMORY_SIZE_BYTES {
+                self.registers.i = Address::from(hex_sprite_address);
+
+                self.pc_advance();
+            }
+
+            Instruction::LoadBcd { source } => {
+                let target_adress = u16::from(self.registers.i) as usize;
+                if target_adress + 3 > MEMORY_SIZE_BYTES {
                     return Err(ProcessorError::MemoryOverrun {
                         adress: self.program_counter,
                     });
                 }
 
-                self.memory.copy_within(
-                    hex_sprite_address..hex_sprite_address + HEX_SPRITE_STRIDE,
-                    target_address,
-                );
+                let binary_value = self.registers.get_general(source);
+                let bcd_digits = to_bcd(binary_value);
+
+                self.memory[target_adress..target_adress + bcd_digits.len()]
+                    .copy_from_slice(&bcd_digits);
 
                 self.pc_advance();
-            }
-
-            Instruction::LoadBcd { .. } => {
-                unimplemented!();
             }
 
             Instruction::StoreRegisterRangeAtI { last } => {
@@ -394,9 +416,19 @@ impl Processor {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::common_test_data::{BCD_INPUT_BYTES, BCD_OUTPUT_DIGITS};
     use std::u8;
 
-    use super::*;
+    #[test]
+    fn test_to_bcd() {
+        for (test_byte, expected_bytes) in BCD_INPUT_BYTES
+            .into_iter()
+            .zip(BCD_OUTPUT_DIGITS.into_iter())
+        {
+            assert_eq!(to_bcd(test_byte), expected_bytes);
+        }
+    }
 
     #[test]
     fn test_pc_advances() {
@@ -1134,6 +1166,47 @@ mod tests {
             proc.registers.i,
             Address::from(u16::from(initial) + offset as u16)
         );
+    }
+
+    #[test]
+    fn test_load_sprite_location() {
+        for sprite_idx in 0..16_u8 {
+            let mut proc = Processor::new(vec![
+                0xF0, 0x29, // LD F, V0
+            ])
+            .unwrap();
+
+            proc.registers.set_general(GeneralRegister::V0, sprite_idx);
+
+            proc.step().unwrap();
+
+            assert_eq!(
+                proc.registers.i,
+                Address::from(sprite_idx as u16 * HEX_SPRITE_STRIDE as u16)
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_bcd() {
+        for (test_byte, expected_digits) in BCD_INPUT_BYTES
+            .into_iter()
+            .zip(BCD_OUTPUT_DIGITS.into_iter())
+        {
+            let mut proc = Processor::new(vec![
+                0xF8, 0x33, // LD B, V8
+            ])
+            .unwrap();
+
+            proc.registers.set_general(GeneralRegister::V8, test_byte);
+            proc.registers.i = Address::from(0x400);
+
+            proc.step().unwrap();
+
+            let target_idx = u16::from(proc.registers.i) as usize;
+
+            assert_eq!(expected_digits, proc.memory[target_idx..target_idx + 3]);
+        }
     }
 
     #[test]
