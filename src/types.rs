@@ -25,22 +25,22 @@ impl From<Address> for u16 {
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, EnumIter, Clone, Copy)]
 pub enum Nibble {
-    Zero,
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-    Seven,
-    Eight,
-    Nine,
-    Ten,
-    Eleven,
-    Twelve,
-    Thirteen,
-    Fourteen,
-    Fifteen,
+    Zero = 0x0_u8,
+    One = 0x1_u8,
+    Two = 0x2_u8,
+    Three = 0x3_u8,
+    Four = 0x4_u8,
+    Five = 0x5_u8,
+    Six = 0x6_u8,
+    Seven = 0x7_u8,
+    Eight = 0x8_u8,
+    Nine = 0x9_u8,
+    Ten = 0xA_u8,
+    Eleven = 0xB_u8,
+    Twelve = 0xC_u8,
+    Thirteen = 0xD_u8,
+    Fourteen = 0xE_u8,
+    Fifteen = 0xF_u8,
 }
 
 impl Nibble {

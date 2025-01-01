@@ -1,6 +1,7 @@
 use strum::IntoEnumIterator;
 use strum_macros::Display;
 
+use crate::display::Display;
 use crate::instructions::{self, Instruction};
 use crate::registers::{Flag, Registers};
 use crate::types::{Address, GeneralRegister};
@@ -9,12 +10,32 @@ const MEMORY_SIZE_BYTES: usize = 0xFFF;
 const STACK_SIZE: usize = 16;
 const PROGRAM_START: usize = 0x200;
 const MAX_PROGRAM_BYTES: usize = MEMORY_SIZE_BYTES - PROGRAM_START;
+const HEX_SPRITE_STRIDE: usize = 5;
+const HEX_SPRITE_DATA: [u8; HEX_SPRITE_STRIDE * 16] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+];
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorError {
     ProgramTooLong { size: usize },
     StackOverflow { adress: Address },
     StackUnderflow { adress: Address },
+    MemoryOverrun { adress: Address },
     DecodeFailure(instructions::InstructionBytePair),
 }
 
@@ -24,6 +45,7 @@ pub struct Processor {
     stack: [Address; STACK_SIZE],
     program_counter: Address,
     stack_pointer: usize,
+    display: Display,
 }
 
 impl Processor {
@@ -35,6 +57,7 @@ impl Processor {
         }
 
         let mut memory = [0_u8; MEMORY_SIZE_BYTES];
+        memory[..HEX_SPRITE_DATA.len()].copy_from_slice(&HEX_SPRITE_DATA);
         memory[PROGRAM_START..PROGRAM_START + program_bytes.len()].copy_from_slice(&program_bytes);
 
         Ok(Processor {
@@ -43,6 +66,7 @@ impl Processor {
             stack: [Address::from(0); STACK_SIZE],
             program_counter: Address::from(PROGRAM_START as u16),
             stack_pointer: 0,
+            display: Display::new(64, 32),
         })
     }
 
@@ -79,7 +103,8 @@ impl Processor {
             }
 
             Instruction::Clear => {
-                unimplemented!() // TODO(display)
+                self.display.clear();
+                self.pc_advance();
             }
 
             Instruction::Return => {
@@ -259,8 +284,23 @@ impl Processor {
                 self.pc_advance();
             }
 
-            Instruction::Draw { .. } => {
-                unimplemented!()
+            Instruction::Draw { x, y, num_bytes } => {
+                let draw_start = u16::from(self.registers.i) as usize;
+                let draw_end = draw_start + num_bytes as usize;
+
+                if draw_end > MEMORY_SIZE_BYTES {
+                    return Err(ProcessorError::MemoryOverrun {
+                        adress: self.program_counter,
+                    });
+                }
+
+                let bytes_to_draw = &self.memory[draw_start..draw_end];
+                self.display.draw_sprite(
+                    self.registers.get_general(x) as usize,
+                    self.registers.get_general(y) as usize,
+                    bytes_to_draw,
+                );
+                self.pc_advance();
             }
 
             Instruction::SkipIfKeyDown { .. } => {
@@ -297,8 +337,23 @@ impl Processor {
                 self.pc_advance();
             }
 
-            Instruction::LoadSpriteLocation { .. } => {
-                unimplemented!()
+            Instruction::LoadSpriteLocation { digit } => {
+                let hex_digit = self.registers.get_general(digit);
+                let hex_sprite_address = hex_digit as usize * HEX_SPRITE_STRIDE;
+                let target_address = u16::from(self.registers.i) as usize;
+
+                if target_address + HEX_SPRITE_STRIDE > MEMORY_SIZE_BYTES {
+                    return Err(ProcessorError::MemoryOverrun {
+                        adress: self.program_counter,
+                    });
+                }
+
+                self.memory.copy_within(
+                    hex_sprite_address..hex_sprite_address + HEX_SPRITE_STRIDE,
+                    target_address,
+                );
+
+                self.pc_advance();
             }
 
             Instruction::LoadBcd { .. } => {
@@ -308,6 +363,11 @@ impl Processor {
             Instruction::StoreRegisterRangeAtI { last } => {
                 let mut dest_address = u16::from(self.registers.i) as usize;
                 for reg in GeneralRegister::iter().take(last as usize + 1) {
+                    if dest_address > MEMORY_SIZE_BYTES {
+                        return Err(ProcessorError::MemoryOverrun {
+                            adress: self.program_counter,
+                        });
+                    }
                     self.memory[dest_address] = self.registers.get_general(reg);
                     dest_address += 1;
                 }
@@ -317,6 +377,11 @@ impl Processor {
             Instruction::LoadRegisterRangeFromI { last } => {
                 let mut src_address = u16::from(self.registers.i) as usize;
                 for reg in GeneralRegister::iter().take(last as usize + 1) {
+                    if src_address > MEMORY_SIZE_BYTES {
+                        return Err(ProcessorError::MemoryOverrun {
+                            adress: self.program_counter,
+                        });
+                    }
                     self.registers.set_general(reg, self.memory[src_address]);
                     src_address += 1;
                 }
