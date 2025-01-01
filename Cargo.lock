@@ -38,6 +38,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "interpreter"
+version = "0.1.0"
+dependencies = [
+ "grid",
+ "rand",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -147,16 +157,6 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
-
-[[package]]
-name = "whip-8"
-version = "0.1.0"
-dependencies = [
- "grid",
- "rand",
- "strum",
- "strum_macros",
-]
 
 [[package]]
 name = "zerocopy"
