@@ -1,5 +1,5 @@
+use core::fmt;
 use strum::IntoEnumIterator;
-use strum_macros::Display;
 
 use crate::display::Display;
 use crate::instructions::{self, Instruction};
@@ -30,13 +30,50 @@ const HEX_SPRITE_DATA: [u8; HEX_SPRITE_STRIDE * 16] = [
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessorError {
-    ProgramTooLong { size: usize },
-    StackOverflow { adress: Address },
-    StackUnderflow { adress: Address },
-    MemoryOverrun { adress: Address },
-    DecodeFailure(instructions::InstructionBytePair),
+    ProgramTooLong {
+        size: usize,
+    },
+    StackOverflow {
+        adress: Address,
+    },
+    StackUnderflow {
+        adress: Address,
+    },
+    MemoryOverrun {
+        adress: Address,
+    },
+    DecodeFailure {
+        instruction: instructions::InstructionBytePair,
+    },
+}
+
+impl fmt::Display for ProcessorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let err_msg = match self {
+            ProcessorError::ProgramTooLong { size } => format!(
+                "Can't load program of size {}, max capacity is {}",
+                size, MAX_PROGRAM_BYTES
+            ),
+            ProcessorError::StackOverflow { adress } => format!(
+                "Stack overflow occured while executing instruction at address: {}",
+                adress
+            ),
+            ProcessorError::StackUnderflow { adress } => format!(
+                "Stack underflow occured while executing instruction at address: {}",
+                adress
+            ),
+            ProcessorError::MemoryOverrun { adress } => format!(
+                "Memory overrun occured while executing instruction at address: {}",
+                adress
+            ),
+            ProcessorError::DecodeFailure { instruction } => {
+                format!("Failed to decode instruction: {}", instruction)
+            }
+        };
+        write!(f, "{}", err_msg)
+    }
 }
 
 pub struct Processor {
@@ -92,8 +129,10 @@ impl Processor {
     pub fn step(&mut self) -> Result<(), ProcessorError> {
         let instruction_bytes = self.fetch();
 
-        let instruction = instructions::decode(instruction_bytes)
-            .ok_or(ProcessorError::DecodeFailure(instruction_bytes))?;
+        let instruction =
+            instructions::decode(instruction_bytes).ok_or(ProcessorError::DecodeFailure {
+                instruction: instruction_bytes,
+            })?;
 
         self.execute(instruction)?;
 
@@ -450,7 +489,7 @@ mod tests {
         let mut proc = Processor::new(vec![0xF0_u8, 0x01_u8]).unwrap();
         assert!(matches!(
             proc.step(),
-            Err(ProcessorError::DecodeFailure(..))
+            Err(ProcessorError::DecodeFailure { .. })
         ));
     }
 

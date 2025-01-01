@@ -1,8 +1,16 @@
+use std::fmt;
+
 use strum_macros::{Display, EnumIter};
 
 #[repr(transparent)]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Address(u16);
+
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#05x}", self.0)
+    }
+}
 
 impl Address {
     pub fn increment(&mut self, value: usize) {
