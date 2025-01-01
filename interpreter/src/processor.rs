@@ -1,7 +1,8 @@
 use core::fmt;
+use grid::Grid;
 use strum::IntoEnumIterator;
 
-use crate::display::Display;
+use crate::display::{Display, Pixel};
 use crate::instructions::{self, Instruction};
 use crate::registers::{Flag, Registers};
 use crate::types::{Address, GeneralRegister};
@@ -36,13 +37,13 @@ pub enum ProcessorError {
         size: usize,
     },
     StackOverflow {
-        adress: Address,
+        address: Address,
     },
     StackUnderflow {
-        adress: Address,
+        address: Address,
     },
     MemoryOverrun {
-        adress: Address,
+        address: Address,
     },
     DecodeFailure {
         instruction: instructions::InstructionBytePair,
@@ -56,17 +57,17 @@ impl fmt::Display for ProcessorError {
                 "Can't load program of size {}, max capacity is {}",
                 size, MAX_PROGRAM_BYTES
             ),
-            ProcessorError::StackOverflow { adress } => format!(
-                "Stack overflow occured while executing instruction at address: {}",
-                adress
+            ProcessorError::StackOverflow { address } => format!(
+                "Stack overflow occurred while executing instruction at address: {}",
+                address
             ),
-            ProcessorError::StackUnderflow { adress } => format!(
-                "Stack underflow occured while executing instruction at address: {}",
-                adress
+            ProcessorError::StackUnderflow { address } => format!(
+                "Stack underflow occurred while executing instruction at address: {}",
+                address
             ),
-            ProcessorError::MemoryOverrun { adress } => format!(
-                "Memory overrun occured while executing instruction at address: {}",
-                adress
+            ProcessorError::MemoryOverrun { address } => format!(
+                "Memory overrun occurred while executing instruction at address: {}",
+                address
             ),
             ProcessorError::DecodeFailure { instruction } => {
                 format!("Failed to decode instruction: {}", instruction)
@@ -75,6 +76,18 @@ impl fmt::Display for ProcessorError {
         write!(f, "{}", err_msg)
     }
 }
+
+impl std::error::Error for ProcessorError {}
+
+pub struct Config {
+    display_width: usize,
+    display_height: usize,
+}
+
+const DEFAULT_CONFIG: Config = Config {
+    display_width: 64,
+    display_height: 32,
+};
 
 pub struct Processor {
     memory: [u8; MEMORY_SIZE_BYTES],
@@ -106,6 +119,9 @@ fn to_bcd(byte: u8) -> [u8; 3] {
 
 impl Processor {
     pub fn new(program_bytes: Vec<u8>) -> Result<Self, ProcessorError> {
+        Self::new_with_config(program_bytes, DEFAULT_CONFIG)
+    }
+    pub fn new_with_config(program_bytes: Vec<u8>, config: Config) -> Result<Self, ProcessorError> {
         if program_bytes.len() > MAX_PROGRAM_BYTES {
             return Err(ProcessorError::ProgramTooLong {
                 size: program_bytes.len(),
@@ -122,7 +138,7 @@ impl Processor {
             stack: [Address::from(0); STACK_SIZE],
             program_counter: Address::from(PROGRAM_START as u16),
             stack_pointer: 0,
-            display: Display::new(64, 32),
+            display: Display::new(config.display_width, config.display_height),
         })
     }
 
@@ -137,6 +153,10 @@ impl Processor {
         self.execute(instruction)?;
 
         Ok(())
+    }
+
+    pub fn get_display_buffer(&mut self) -> Option<&Grid<Pixel>> {
+        self.display.get_display_buffer()
     }
 
     fn fetch(&self) -> instructions::InstructionBytePair {
@@ -168,7 +188,7 @@ impl Processor {
             Instruction::Return => {
                 if self.stack_pointer == 0 {
                     return Err(ProcessorError::StackUnderflow {
-                        adress: self.program_counter,
+                        address: self.program_counter,
                     });
                 }
                 self.program_counter = self.stack[self.stack_pointer];
@@ -182,7 +202,7 @@ impl Processor {
                 self.stack_pointer += 1;
                 if self.stack_pointer >= STACK_SIZE {
                     return Err(ProcessorError::StackOverflow {
-                        adress: self.program_counter,
+                        address: self.program_counter,
                     });
                 }
 
@@ -348,7 +368,7 @@ impl Processor {
 
                 if draw_end > MEMORY_SIZE_BYTES {
                     return Err(ProcessorError::MemoryOverrun {
-                        adress: self.program_counter,
+                        address: self.program_counter,
                     });
                 }
 
@@ -405,17 +425,17 @@ impl Processor {
             }
 
             Instruction::LoadBcd { source } => {
-                let target_adress = u16::from(self.registers.i) as usize;
-                if target_adress + 3 > MEMORY_SIZE_BYTES {
+                let target_address = u16::from(self.registers.i) as usize;
+                if target_address + 3 > MEMORY_SIZE_BYTES {
                     return Err(ProcessorError::MemoryOverrun {
-                        adress: self.program_counter,
+                        address: self.program_counter,
                     });
                 }
 
                 let binary_value = self.registers.get_general(source);
                 let bcd_digits = to_bcd(binary_value);
 
-                self.memory[target_adress..target_adress + bcd_digits.len()]
+                self.memory[target_address..target_address + bcd_digits.len()]
                     .copy_from_slice(&bcd_digits);
 
                 self.pc_advance();
@@ -426,7 +446,7 @@ impl Processor {
                 for reg in GeneralRegister::iter().take(last as usize + 1) {
                     if dest_address > MEMORY_SIZE_BYTES {
                         return Err(ProcessorError::MemoryOverrun {
-                            adress: self.program_counter,
+                            address: self.program_counter,
                         });
                     }
                     self.memory[dest_address] = self.registers.get_general(reg);
@@ -440,7 +460,7 @@ impl Processor {
                 for reg in GeneralRegister::iter().take(last as usize + 1) {
                     if src_address > MEMORY_SIZE_BYTES {
                         return Err(ProcessorError::MemoryOverrun {
-                            adress: self.program_counter,
+                            address: self.program_counter,
                         });
                     }
                     self.registers.set_general(reg, self.memory[src_address]);
@@ -543,7 +563,7 @@ mod tests {
         assert_eq!(
             result,
             Err(ProcessorError::StackUnderflow {
-                adress: Address::from(0x202)
+                address: Address::from(0x202)
             })
         );
     }
@@ -593,7 +613,7 @@ mod tests {
         assert_eq!(
             result,
             Err(ProcessorError::StackOverflow {
-                adress: Address::from(0x200)
+                address: Address::from(0x200)
             })
         );
     }
