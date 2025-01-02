@@ -3,6 +3,7 @@ mod commands;
 use crate::commands::Args;
 use clap::Parser;
 use error_iter::ErrorIter as _;
+use interpreter::display::Pixel;
 use interpreter::processor::*;
 use log::error;
 use pixels::{Pixels, SurfaceTexture};
@@ -14,8 +15,11 @@ use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-const WIDTH: u32 = 320;
-const HEIGHT: u32 = 240;
+const WIDTH: u32 = 64;
+const HEIGHT: u32 = 32;
+const OFF_COLOUR: [u8; 4] = [0x10, 0x10, 0x10, 0xFF];
+const ON_COLOUR: [u8; 4] = [0x5E, 0x48, 0xE8, 0xFF];
+const INITIAL_DISPLAY_SCALING: u32 = 10;
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     error!("{method_name}() failed: {err}");
@@ -47,7 +51,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(
+            (INITIAL_DISPLAY_SCALING * WIDTH) as f64,
+            (INITIAL_DISPLAY_SCALING * HEIGHT) as f64,
+        );
         WindowBuilder::new()
             .with_title("WHIP-8")
             .with_inner_size(size)
@@ -68,9 +75,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..
         } = event
         {
-            for pixel in pixels.frame_mut().chunks_exact_mut(4) {
-                pixel.copy_from_slice(&[0x5e, 0x48, 0xe8, 0xff]);
+            for (dest, src) in pixels
+                .frame_mut()
+                .chunks_exact_mut(4)
+                .zip(proc.get_display_buffer().iter())
+            {
+                dest.copy_from_slice(match src {
+                    Pixel::Off => &OFF_COLOUR,
+                    Pixel::On => &ON_COLOUR,
+                });
             }
+
             if let Err(err) = pixels.render() {
                 log_error("pixels.render", err);
                 elwt.exit();

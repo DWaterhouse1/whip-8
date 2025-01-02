@@ -70,6 +70,10 @@ impl Display {
         pixels_disabled
     }
 
+    pub fn get_display_buffer(&self) -> &Grid<Pixel> {
+        &self.display_buffer
+    }
+
     fn draw_byte(&mut self, col: usize, row: usize, value: u8) -> PixelsDisabled {
         let mut draw_column = col;
         let mut turned_any_off = false;

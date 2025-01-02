@@ -1,7 +1,8 @@
 use core::fmt;
+use grid::Grid;
 use strum::IntoEnumIterator;
 
-use crate::display::Display;
+use crate::display::{Display, Pixel};
 use crate::instructions::{self, Instruction};
 use crate::registers::{Flag, Registers};
 use crate::types::{Address, GeneralRegister};
@@ -76,6 +77,16 @@ impl fmt::Display for ProcessorError {
     }
 }
 
+pub struct Config {
+    display_width: usize,
+    display_height: usize,
+}
+
+const DEFAULT_CONFIG: Config = Config {
+    display_width: 64,
+    display_height: 32,
+};
+
 pub struct Processor {
     memory: [u8; MEMORY_SIZE_BYTES],
     registers: Registers,
@@ -106,6 +117,9 @@ fn to_bcd(byte: u8) -> [u8; 3] {
 
 impl Processor {
     pub fn new(program_bytes: Vec<u8>) -> Result<Self, ProcessorError> {
+        Self::new_with_config(program_bytes, DEFAULT_CONFIG)
+    }
+    pub fn new_with_config(program_bytes: Vec<u8>, config: Config) -> Result<Self, ProcessorError> {
         if program_bytes.len() > MAX_PROGRAM_BYTES {
             return Err(ProcessorError::ProgramTooLong {
                 size: program_bytes.len(),
@@ -122,7 +136,7 @@ impl Processor {
             stack: [Address::from(0); STACK_SIZE],
             program_counter: Address::from(PROGRAM_START as u16),
             stack_pointer: 0,
-            display: Display::new(64, 32),
+            display: Display::new(config.display_width, config.display_height),
         })
     }
 
@@ -137,6 +151,10 @@ impl Processor {
         self.execute(instruction)?;
 
         Ok(())
+    }
+
+    pub fn get_display_buffer(&self) -> &Grid<Pixel> {
+        self.display.get_display_buffer()
     }
 
     fn fetch(&self) -> instructions::InstructionBytePair {
