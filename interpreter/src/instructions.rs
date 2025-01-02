@@ -334,14 +334,14 @@ mod tests {
 
     #[test]
     fn test_sys() {
-        let non_sys_adresses = [0x00E0, 0x00EE];
-        for value in all_addresses().filter(|x| !non_sys_adresses.contains(x)) {
+        let non_sys_addresses = [0x00E0, 0x00EE];
+        for value in all_addresses().filter(|x| !non_sys_addresses.contains(x)) {
             let sys_bytes = InstructionBytePair(value);
             let decoded = decode(sys_bytes).unwrap();
             assert_eq!(decoded, Instruction::Sys { addr: value.into() });
         }
 
-        for value in non_sys_adresses {
+        for value in non_sys_addresses {
             let non_sys_bytes = InstructionBytePair(value);
             let decoded = decode(non_sys_bytes).unwrap();
             assert!(!matches!(decoded, Instruction::Sys { addr: _ }));

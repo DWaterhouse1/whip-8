@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut proc = Processor::new(data).map_err(|err| {
         format!(
-            "Error occured loading program at path {}: {}",
+            "Error occurred loading program at path {}: {}",
             args.path.display(),
             err
         )
