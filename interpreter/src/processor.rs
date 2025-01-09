@@ -933,12 +933,12 @@ mod tests {
 
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), lhs - rhs);
 
-        // should not have underflowed
+        // should not have overflowed
         assert_eq!(proc.registers.get_vf_flag(), Some(Flag::High));
     }
 
     #[test]
-    fn test_subtract_underflow() {
+    fn test_subtract_overflow() {
         let mut proc = Processor::new(vec![
             0x81, 0x25, // SUB V1, V2
         ])
@@ -961,7 +961,7 @@ mod tests {
 
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), expected);
 
-        // should have underflowed
+        // should have overflow
         assert_eq!(proc.registers.get_vf_flag(), Some(Flag::Low));
     }
 
@@ -1028,12 +1028,12 @@ mod tests {
 
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), rhs - lhs);
 
-        // should not have underflowed
+        // should not have overflowed
         assert_eq!(proc.registers.get_vf_flag(), Some(Flag::High));
     }
 
     #[test]
-    fn test_subtract_negate_underflow() {
+    fn test_subtract_negate_overflow() {
         let mut proc = Processor::new(vec![
             0x81, 0x27, // SUBN V1, V2
         ])
@@ -1056,7 +1056,7 @@ mod tests {
 
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), expected);
 
-        // should have underflowed
+        // should have overflow
         assert_eq!(proc.registers.get_vf_flag(), Some(Flag::Low));
     }
 
