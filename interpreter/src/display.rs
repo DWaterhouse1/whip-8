@@ -31,23 +31,27 @@ pub enum PixelsDisabled {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Display {
     display_buffer: Grid<Pixel>,
+    dirty: bool,
 }
 
 impl Display {
     pub fn new(width: usize, height: usize) -> Self {
         Display {
             display_buffer: Grid::<Pixel>::init(height, width, Pixel::Off),
+            dirty: true,
         }
     }
 
     pub fn from_vec(vec: Vec<Pixel>, cols: usize) -> Self {
         Display {
             display_buffer: Grid::<Pixel>::from_vec(vec, cols),
+            dirty: true,
         }
     }
 
     pub fn clear(&mut self) {
         self.display_buffer.fill(Pixel::Off);
+        self.dirty = true;
     }
 
     pub fn draw_sprite(&mut self, x: usize, y: usize, data: &[u8]) -> PixelsDisabled {
@@ -67,7 +71,17 @@ impl Display {
             row += 1;
         }
 
+        self.dirty = true;
         pixels_disabled
+    }
+
+    pub fn get_display_buffer(&mut self) -> Option<&Grid<Pixel>> {
+        if self.dirty {
+            self.dirty = false;
+            Some(&self.display_buffer)
+        } else {
+            None
+        }
     }
 
     fn draw_byte(&mut self, col: usize, row: usize, value: u8) -> PixelsDisabled {
