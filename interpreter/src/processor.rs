@@ -291,7 +291,7 @@ impl Processor {
                 let rhs = self.registers.get_general(source);
                 let (result, borrow) = lhs.overflowing_sub(rhs);
                 self.registers.set_general(dest, result);
-                if borrow {
+                if !borrow {
                     self.registers.set_vf_flag(Flag::High);
                 } else {
                     self.registers.set_vf_flag(Flag::Low);
@@ -302,12 +302,14 @@ impl Processor {
             Instruction::ShiftRight { dest, .. } => {
                 let value = self.registers.get_general(dest);
                 let lsb = value & 0x01_u8;
+                self.registers.set_general(dest, value >> 1);
+
                 if lsb == 0x01_u8 {
                     self.registers.set_vf_flag(Flag::High);
                 } else {
                     self.registers.set_vf_flag(Flag::Low);
                 }
-                self.registers.set_general(dest, value >> 1);
+
                 self.pc_advance();
             }
 
@@ -316,7 +318,7 @@ impl Processor {
                 let rhs = self.registers.get_general(source);
                 let (result, borrow) = rhs.overflowing_sub(lhs);
                 self.registers.set_general(dest, result);
-                if borrow {
+                if !borrow {
                     self.registers.set_vf_flag(Flag::High);
                 } else {
                     self.registers.set_vf_flag(Flag::Low);
@@ -327,12 +329,12 @@ impl Processor {
             Instruction::ShiftLeft { dest, .. } => {
                 let value = self.registers.get_general(dest);
                 let msb = (value & 0b10000000_u8) >> 7;
+                self.registers.set_general(dest, value << 1);
                 if msb == 0x01_u8 {
                     self.registers.set_vf_flag(Flag::High);
                 } else {
                     self.registers.set_vf_flag(Flag::Low);
                 }
-                self.registers.set_general(dest, value << 1);
                 self.pc_advance();
             }
 
@@ -932,7 +934,7 @@ mod tests {
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), lhs - rhs);
 
         // should not have underflowed
-        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::Low));
+        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::High));
     }
 
     #[test]
@@ -959,8 +961,8 @@ mod tests {
 
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), expected);
 
-        // should not have underflowed
-        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::High));
+        // should have underflowed
+        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::Low));
     }
 
     #[test]
@@ -1027,7 +1029,7 @@ mod tests {
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), rhs - lhs);
 
         // should not have underflowed
-        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::Low));
+        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::High));
     }
 
     #[test]
@@ -1055,7 +1057,7 @@ mod tests {
         assert_eq!(proc.registers.get_general(GeneralRegister::V1), expected);
 
         // should have underflowed
-        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::High));
+        assert_eq!(proc.registers.get_vf_flag(), Some(Flag::Low));
     }
 
     #[test]
