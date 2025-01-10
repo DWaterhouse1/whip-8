@@ -99,6 +99,12 @@ const DEFAULT_CONFIG: Config = Config {
     display_height: 32,
 };
 
+#[derive(Debug, Clone, Copy)]
+struct AwaitingKey {
+    register: GeneralRegister,
+    pressed: bool,
+}
+
 pub struct Processor {
     memory: [u8; MEMORY_SIZE_BYTES],
     registers: Registers,
@@ -107,6 +113,7 @@ pub struct Processor {
     stack_pointer: usize,
     display: Display,
     keys: Keys,
+    awaiting_key: Option<AwaitingKey>,
 }
 
 fn to_bcd(byte: u8) -> [u8; 3] {
@@ -151,10 +158,16 @@ impl Processor {
             stack_pointer: 0,
             display: Display::new(config.display_width, config.display_height),
             keys: Keys::new(),
+            awaiting_key: None,
         })
     }
 
     pub fn step(&mut self) -> Result<(), ProcessorError> {
+        if self.awaiting_key.is_some() {
+            std::thread::sleep(std::time::Duration::from_micros(100));
+            return Ok(());
+        }
+
         let instruction_bytes = self.fetch();
 
         let instruction =
@@ -172,6 +185,16 @@ impl Processor {
     }
 
     pub fn add_key_event(&mut self, key: usize, status: KeyStatus) {
+        if let Some(wait_key) = &self.awaiting_key.clone() {
+            if wait_key.pressed && status == KeyStatus::Released {
+                self.awaiting_key = None;
+                self.registers.set_general(wait_key.register, key as u8);
+            }
+            if !wait_key.pressed && status == KeyStatus::Pressed {
+                self.awaiting_key.as_mut().unwrap().pressed = true;
+            }
+        }
+
         self.keys.input(key, status);
     }
 
@@ -437,8 +460,12 @@ impl Processor {
                 self.pc_advance();
             }
 
-            Instruction::LoadFromKey { .. } => {
-                unimplemented!()
+            Instruction::LoadFromKey { dest } => {
+                self.awaiting_key = Some(AwaitingKey {
+                    register: dest,
+                    pressed: false,
+                });
+                self.pc_advance();
             }
 
             Instruction::SetDelayTimer { source } => {
