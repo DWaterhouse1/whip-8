@@ -23,6 +23,7 @@ pub struct Chip8Interpreter {
     exit_requested: Arc<AtomicBool>,
     frame_channel: Sender<Grid<Pixel>>,
     keys_channel: Receiver<KeyUpdate>,
+    timer_channel: Receiver<usize>,
 }
 
 impl Chip8Interpreter {
@@ -31,12 +32,14 @@ impl Chip8Interpreter {
         exit_flag: Arc<AtomicBool>,
         frame_sender: Sender<Grid<Pixel>>,
         key_receiver: Receiver<KeyUpdate>,
+        timer_receiver: Receiver<usize>,
     ) -> Result<Chip8Interpreter, ProcessorError> {
         Ok(Self {
             processor: Processor::new(program_data)?,
             exit_requested: exit_flag,
             frame_channel: frame_sender,
             keys_channel: key_receiver,
+            timer_channel: timer_receiver,
         })
     }
 
@@ -57,6 +60,12 @@ impl Chip8Interpreter {
             while let Ok(key_event) = self.keys_channel.try_recv() {
                 self.processor
                     .add_key_event(key_event.key, key_event.status);
+            }
+
+            if let Ok(timer_decrement) = self.timer_channel.try_recv() {
+                for _ in 0..timer_decrement {
+                    self.processor.decrement_timers();
+                }
             }
         }
     }

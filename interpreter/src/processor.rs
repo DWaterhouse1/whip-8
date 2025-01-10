@@ -175,6 +175,11 @@ impl Processor {
         self.keys.input(key, status);
     }
 
+    pub fn decrement_timers(&mut self) {
+        self.registers.decrement_delay();
+        self.registers.decrement_sound();
+    }
+
     fn fetch(&self) -> instructions::InstructionBytePair {
         let instruction_index = u16::from(self.program_counter) as usize;
         let instruction_bytes: [u8; 2] =
