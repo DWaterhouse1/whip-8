@@ -2,13 +2,13 @@
 // specifically https://github.com/parasyte/pixels/tree/main/examples/minimal-winit
 // See PIXELS_LICENSE.md for the license
 
-use crate::utils::log_error;
+use crate::{chip_8_interpreter::KeyUpdate, utils::log_error};
 use grid::Grid;
-use interpreter::display::Pixel;
+use interpreter::{display::Pixel, keypad::KeyStatus};
 use pixels::{Pixels, SurfaceTexture};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    mpsc::Receiver,
+    mpsc::{Receiver, Sender},
     Arc,
 };
 use winit::keyboard::KeyCode;
@@ -21,6 +21,25 @@ use winit::{
 use winit_input_helper::WinitInputHelper;
 
 const INITIAL_DISPLAY_SCALING: usize = 10;
+
+const KEY_BINDINGS: [KeyCode; 16] = [
+    KeyCode::KeyX,
+    KeyCode::Digit1,
+    KeyCode::Digit2,
+    KeyCode::Digit3,
+    KeyCode::KeyQ,
+    KeyCode::KeyW,
+    KeyCode::KeyE,
+    KeyCode::KeyA,
+    KeyCode::KeyS,
+    KeyCode::KeyD,
+    KeyCode::KeyZ,
+    KeyCode::KeyC,
+    KeyCode::Digit4,
+    KeyCode::KeyR,
+    KeyCode::KeyF,
+    KeyCode::KeyV,
+];
 
 pub struct FrontendConfig {
     pub width: usize,
@@ -36,6 +55,7 @@ pub struct Frontend {
     window: Window,
     exit_requested: Arc<AtomicBool>,
     frame_channel: Receiver<Grid<Pixel>>,
+    keys_channel: Sender<KeyUpdate>,
     image_buffer: Grid<Pixel>,
     off_colour: [u8; 4],
     on_colour: [u8; 4],
@@ -46,6 +66,7 @@ impl Frontend {
         config: FrontendConfig,
         exit_flag: Arc<AtomicBool>,
         frame_receiver: Receiver<Grid<Pixel>>,
+        keys_sender: Sender<KeyUpdate>,
     ) -> Result<Frontend, Box<dyn std::error::Error>> {
         let event_loop = EventLoop::new()?;
         let input = WinitInputHelper::new();
@@ -74,6 +95,7 @@ impl Frontend {
             window,
             exit_requested: exit_flag,
             frame_channel: frame_receiver,
+            keys_channel: keys_sender,
             image_buffer: Grid::<Pixel>::init(config.height, config.width, Pixel::Off),
             off_colour: config.off_colour,
             on_colour: config.on_colour,
@@ -116,11 +138,36 @@ impl Frontend {
                 }
             }
 
-            if self.input.update(&event)
-                && (self.input.key_pressed(KeyCode::Escape) || self.input.close_requested())
-            {
-                elwt.exit();
-                return;
+            if self.input.update(&event) {
+                if self.input.key_pressed(KeyCode::Escape) || self.input.close_requested() {
+                    elwt.exit();
+                    return;
+                }
+
+                for (idx, key_code) in KEY_BINDINGS.iter().enumerate() {
+                    if self.input.key_pressed(*key_code) {
+                        if let Err(err) = self.keys_channel.send(KeyUpdate {
+                            key: idx,
+                            status: KeyStatus::Pressed,
+                        }) {
+                            log_error(err);
+                            self.exit_requested.store(true, Ordering::SeqCst);
+                            elwt.exit();
+                            return;
+                        }
+                    }
+                    if self.input.key_released(*key_code) {
+                        if let Err(err) = self.keys_channel.send(KeyUpdate {
+                            key: idx,
+                            status: KeyStatus::Released,
+                        }) {
+                            log_error(err);
+                            self.exit_requested.store(true, Ordering::SeqCst);
+                            elwt.exit();
+                            return;
+                        }
+                    }
+                }
             }
 
             if let Some(size) = self.input.window_resized() {

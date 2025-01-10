@@ -29,11 +29,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // sync structures
     let (frame_tx, frame_rx) = std::sync::mpsc::channel();
+    let (key_tx, key_rx) = std::sync::mpsc::channel();
     let exit_requested = Arc::new(AtomicBool::new(false));
 
     env_logger::init();
 
-    let mut chip8 = Chip8Interpreter::new(program_data, exit_requested.clone(), frame_tx)?;
+    let mut chip8 = Chip8Interpreter::new(program_data, exit_requested.clone(), frame_tx, key_rx)?;
 
     let frontend = Frontend::new(
         FrontendConfig {
@@ -44,6 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         exit_requested.clone(),
         frame_rx,
+        key_tx,
     )?;
 
     let interpreter_thread = std::thread::spawn(move || {

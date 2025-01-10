@@ -4,6 +4,7 @@ use strum::IntoEnumIterator;
 
 use crate::display::{Display, Pixel};
 use crate::instructions::{self, Instruction};
+use crate::keypad::{KeyStatus, Keys, NUM_KEYS};
 use crate::registers::{Flag, Registers};
 use crate::types::{Address, GeneralRegister};
 
@@ -48,6 +49,9 @@ pub enum ProcessorError {
     DecodeFailure {
         instruction: instructions::InstructionBytePair,
     },
+    KeyOutOfRange {
+        key_index: u8,
+    },
 }
 
 impl fmt::Display for ProcessorError {
@@ -71,6 +75,12 @@ impl fmt::Display for ProcessorError {
             ),
             ProcessorError::DecodeFailure { instruction } => {
                 format!("Failed to decode instruction: {}", instruction)
+            }
+            ProcessorError::KeyOutOfRange { key_index } => {
+                format!(
+                    "Tried to query keycode {}, but there are only {} keys.",
+                    key_index, NUM_KEYS
+                )
             }
         };
         write!(f, "{}", err_msg)
@@ -96,6 +106,7 @@ pub struct Processor {
     program_counter: Address,
     stack_pointer: usize,
     display: Display,
+    keys: Keys,
 }
 
 fn to_bcd(byte: u8) -> [u8; 3] {
@@ -139,6 +150,7 @@ impl Processor {
             program_counter: Address::from(PROGRAM_START as u16),
             stack_pointer: 0,
             display: Display::new(config.display_width, config.display_height),
+            keys: Keys::new(),
         })
     }
 
@@ -157,6 +169,10 @@ impl Processor {
 
     pub fn get_display_buffer(&mut self) -> Option<&Grid<Pixel>> {
         self.display.get_display_buffer()
+    }
+
+    pub fn add_key_event(&mut self, key: usize, status: KeyStatus) {
+        self.keys.input(key, status);
     }
 
     fn fetch(&self) -> instructions::InstructionBytePair {
@@ -383,12 +399,32 @@ impl Processor {
                 self.pc_advance();
             }
 
-            Instruction::SkipIfKeyDown { .. } => {
-                unimplemented!()
+            Instruction::SkipIfKeyDown { key_val } => {
+                let key_value = self.registers.get_general(key_val);
+                let Some(status) = self.keys.get_status(key_value as usize) else {
+                    return Err(ProcessorError::KeyOutOfRange {
+                        key_index: key_value,
+                    });
+                };
+                if status == KeyStatus::Pressed {
+                    self.pc_skip();
+                } else {
+                    self.pc_advance();
+                }
             }
 
-            Instruction::SkipIfKeyUp { .. } => {
-                unimplemented!()
+            Instruction::SkipIfKeyUp { key_val } => {
+                let key_value = self.registers.get_general(key_val);
+                let Some(status) = self.keys.get_status(key_value as usize) else {
+                    return Err(ProcessorError::KeyOutOfRange {
+                        key_index: key_value,
+                    });
+                };
+                if status == KeyStatus::Released {
+                    self.pc_skip();
+                } else {
+                    self.pc_advance();
+                }
             }
 
             Instruction::LoadFromDelayTimer { dest } => {
@@ -1164,6 +1200,86 @@ mod tests {
         proc.step().unwrap();
 
         assert_eq!(proc.program_counter, Address::from(0x321));
+    }
+
+    #[test]
+    fn test_skip_if_key_down_false() {
+        let mut proc = Processor::new(vec![
+            0xE1, 0x9E, // SKP V1 : addr 0x200
+            0x00, 0x00, // empty  : addr 0x202
+            0x00, 0x00, // empty  : addr 0x204
+        ])
+        .unwrap();
+
+        let test_key = 2;
+
+        proc.registers.set_general(GeneralRegister::V1, test_key);
+        proc.add_key_event(test_key as usize, KeyStatus::Released);
+
+        proc.step().unwrap();
+
+        // The key is released, so we should not have skipped
+        assert_eq!(proc.program_counter, Address::from(0x202));
+    }
+
+    #[test]
+    fn test_skip_if_key_down_true() {
+        let mut proc = Processor::new(vec![
+            0xE1, 0x9E, // SKP V1 : addr 0x200
+            0x00, 0x00, // empty  : addr 0x202
+            0x00, 0x00, // empty  : addr 0x204
+        ])
+        .unwrap();
+
+        let test_key = 2;
+
+        proc.registers.set_general(GeneralRegister::V1, test_key);
+        proc.add_key_event(test_key as usize, KeyStatus::Pressed);
+
+        proc.step().unwrap();
+
+        // The key is pressed, so we should have skipped
+        assert_eq!(proc.program_counter, Address::from(0x204));
+    }
+
+    #[test]
+    fn test_skip_if_key_up_false() {
+        let mut proc = Processor::new(vec![
+            0xE1, 0xA1, // SKP V1 : addr 0x200
+            0x00, 0x00, // empty  : addr 0x202
+            0x00, 0x00, // empty  : addr 0x204
+        ])
+        .unwrap();
+
+        let test_key = 2;
+
+        proc.registers.set_general(GeneralRegister::V1, test_key);
+        proc.add_key_event(test_key as usize, KeyStatus::Pressed);
+
+        proc.step().unwrap();
+
+        // The key is pressed, so we should not have skipped
+        assert_eq!(proc.program_counter, Address::from(0x202));
+    }
+
+    #[test]
+    fn test_skip_if_key_up_true() {
+        let mut proc = Processor::new(vec![
+            0xE1, 0xA1, // SKP V1 : addr 0x200
+            0x00, 0x00, // empty  : addr 0x202
+            0x00, 0x00, // empty  : addr 0x204
+        ])
+        .unwrap();
+
+        let test_key = 2;
+
+        proc.registers.set_general(GeneralRegister::V1, test_key);
+        proc.add_key_event(test_key as usize, KeyStatus::Released);
+
+        proc.step().unwrap();
+
+        // The key is released, so we should have skipped
+        assert_eq!(proc.program_counter, Address::from(0x204));
     }
 
     #[test]
